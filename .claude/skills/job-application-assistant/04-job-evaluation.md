@@ -231,6 +231,41 @@ verification rule above. If it is missing or stale, research per the checklist a
 then write (or overwrite) the file with fresh findings and today's date, so the next
 consumer benefits.
 
+## Interview-Call Likelihood (Heuristic, Optional)
+
+This is **not a 6th scoring dimension**. It never enters the weighted average that
+produces `rank_score`, and it never shifts a `Strong Fit`/`Good Fit`/etc. verdict band.
+It answers a different question than the scoring dimensions above - "given I apply, how
+likely is a callback" instead of "is this a good fit" - and the two must stay separate so
+this heuristic can never corrupt the existing weighting or thresholds.
+
+**Inputs** (reuse existing dimension data, do not duplicate it):
+
+1. **Experience-band centering** - from dimension 2 "Experience Match" above. Reuse its
+   Strong/Moderate/Entry-level lists and the experience-level-mismatch note already
+   applied elsewhere in this framework (roles wanting 0-2 yrs or 8+ yrs are flagged as
+   mismatches even though not a hard fail). A posting whose stated experience band
+   centers near the candidate's actual experience pushes likelihood higher; a posting at
+   the edge of or outside that band pushes it lower.
+2. **Required-skill overlap density** - from dimension 1 "Technical Skills Match" above.
+   Reuse its Strong/Moderate/Weak match lists, but restrict the comparison to skills the
+   posting marks as *required* (not nice-to-have). Dense overlap with Strong-match skills
+   pushes likelihood higher (clears keyword/ATS screening); reliance on Weak-match skills
+   to cover core requirements pushes it lower.
+3. **Posting freshness (`posted_date`)** - a very recently posted role (roughly under 7
+   days old) is a mild positive. Older postings are neutral, never a negative - consistent
+   with this framework's and `/rank`'s existing treatment of staleness as a signal to
+   surface, never a veto to apply.
+
+**Output:** a `Low` | `Medium` | `High` band plus a one-clause rationale. This is
+qualitative only - never render it as a numeric percentage, since there is no real
+outcome data (actual callback history) to calibrate a number against.
+
+**Non-goals.** This heuristic does not account for actual applicant volume, ATS or
+recruiter behavior, referrals, or company-specific screening practices - none of that is
+observable to this system. State the band and its rationale plainly; never imply the
+heuristic knows or estimates any of these.
+
 ## Weighting
 - Technical Skills: 30%
 - Experience Match: 25%
