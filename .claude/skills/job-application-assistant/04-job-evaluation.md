@@ -46,6 +46,24 @@ Judge the level comparison the same way you judge everything else in this framew
 
 **Worked example:** a candidate whose Languages table lists Spanish (Native) and English (B1/B2). A posting requiring "fluent Russian" → **FAIL**, Russian isn't declared at all. A posting requiring "fluent English" → **FLAG**, English is declared but "fluent" plausibly exceeds B1/B2 — score and draft the application, but tell the candidate this posting's bar may be a stretch and let them decide. A posting requiring "conversational English" or unspecified English → **PASS**, B1/B2 clears a "conversational" bar cleanly.
 
+## Experience Requirement Gate — run before scoring
+
+This gate checks a posting's stated years-of-experience requirement against the candidate's actual years of professional experience. Like the Language Gate above, it runs before the five Scoring Dimensions and produces a hard veto on a clear mismatch, rather than just softening the Experience Match score. Its verdict is tracked downstream: `/rank` records the result as `experience_gate` (PASS/FAIL/FLAG) with a supporting `experience_note`, persists both into `seen_jobs.json`, and treats a FAIL as a shortlist veto exactly like a location or language FAIL.
+
+**Candidate's years of experience:** derive this from the Professional Experience section of `01-candidate-profile.md` / CLAUDE.md — the span from the earliest full-time role's start date to today (currently ~4 years for this candidate; recompute rather than trusting a hardcoded number, since this grows over time and the framework is not re-run daily).
+
+Read the posting's stated experience requirement **as a numeric range**, supporting open-ended forms (`"4+ years"` → `[4, ∞)`, `"up to 4 years"` → `[0, 4]`) as well as closed ranges (`"2-4 years"` → `[2, 4]`). Compare the candidate's years against that range:
+
+| Posting's stated range vs. candidate's years | Verdict |
+|---|---|
+| Candidate's years fall **within** the stated range (inclusive of either bound) | **PASS.** No note needed. Example: candidate has 4 years; posting wants "2-4 years", "4+ years", "4-6 years", or "2+ years" (no ceiling) — all PASS. |
+| Candidate's years fall **outside** the stated range on either side — posting's max is below the candidate's years (candidate overqualified/too senior for the band), or posting's min is above the candidate's years (candidate underqualified) | **FAIL — hard stop.** Do not score, do not draft. Quote the exact requirement line next to the candidate's years. Example: candidate has 4 years; posting wants "1-3 years" (max 3 < 4) or "6-12 years" (min 6 > 4) — both FAIL. |
+| Posting states **no numeric experience range at all** — just a job title, or a vague level descriptor ("Entry level", "Experienced") with no years attached | **FLAG, then proceed.** Not a fail — score and draft normally, but note in the report that the experience range was not stated and could not be verified, so the fit is unconfirmed on this axis. Never silently drop the posting and never silently treat an unstated range as a clean pass or a fail. |
+
+This is a **strict, literal filter** on the candidate's request: only the numbers as stated matter, not a title's implied seniority ("Senior", "Lead", "Staff") when no year range is actually given — an unnumbered senior-sounding title falls into the FLAG row above, not FAIL, because the gate has nothing numeric to fail it on. If the user wants title-implied seniority factored in too, that is a judgment call for them, not this gate.
+
+**Worked example:** a candidate with 4 years of experience. A posting requiring "6-12 years of experience in enterprise data engineering" → **FAIL**, quote "6-12 years" against the candidate's 4. A posting requiring "2+ years with Snowflake" → **PASS**, 4 clears an open floor of 2. A posting titled "Lead II - Data Engineering" with no years stated anywhere in the text → **FLAG**, note that the range could not be confirmed from the posting.
+
 ## Scoring Dimensions
 
 Evaluate each job posting against these five dimensions:
