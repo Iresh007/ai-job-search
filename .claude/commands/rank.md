@@ -51,6 +51,8 @@ Dispatch parallel `general-purpose` agents via the **Agent tool**, ~5 jobs per a
 - **Before marking anything `expired`, the agent must exhaust the escalation order** in `.claude/skills/job-application-assistant/09-web-research.md`: a `WebFetch` 403 is a rejected *client*, not a missing page, and retrying with browser headers via curl recovers most corporate and bank domains. A stored URL ending in a `#fragment` points at a listing page rather than a posting, so the agent should search the employer's own careers site for the role by name before writing the job off. Include this instruction in every scoring agent's prompt. `expired` means "retrieval genuinely failed after retrying", not "the first fetch was unhelpful".
 - Scope is triage: posting text vs. rubric. **No company research, no salary lookup, no web searches** - that depth belongs to `/apply`.
 
+Each agent also computes an Interview-Call Likelihood band from the same fetched posting and rubric it already has - no extra WebFetch, no extra agent dispatch - using the heuristic defined in `04-job-evaluation.md`'s "Interview-Call Likelihood (Heuristic, Optional)" section.
+
 Each agent returns a JSON array, one object per job:
 
 ```json
@@ -64,7 +66,9 @@ Each agent returns a JSON array, one object per job:
   "deadline": "YYYY-MM-DD" | null,
   "strengths": ["1-3 bullets, grounded in the posting text"],
   "gaps": ["1-3 bullets, honest"],
-  "language": "<posting language>"
+  "language": "<posting language>",
+  "callback_likelihood": "Low" | "Medium" | "High",
+  "callback_rationale": "<one clause>"
 }
 ```
 
@@ -107,6 +111,8 @@ Back in the main context, for each scored job:
    treated exactly like an absent one and reported once in the Step 5 summary with its
    portal.
 
+8. **Interview-Call Likelihood is carried, not scored.** `callback_likelihood` and `callback_rationale` are carried through unchanged from Step 2's JSON. They do **not** affect sort order, the location veto, the language veto, or the deadline/staleness markers - this is a separate, non-scored signal, never blended into the ranking logic above.
+
 Sort by overall score (descending), urgency as tiebreaker.
 
 ---
@@ -121,7 +127,7 @@ python3 tools/rank_state.py apply --results "<path to that temporary file>"
 
 What it writes per entry - all additive to the scraper's schema:
 
-- Ranked jobs: `"status": "ranked"` plus `"rank_score": <overall>`, `"rank_verdict": "<band>"`, `"rank_date": "YYYY-MM-DD"`, `"location_verdict": "PASS"/"FAIL"/"FLAG"` (never the bare `location` key - that is the scraper's place field, e.g. "Aarhus, Denmark", and overwriting it with a verdict destroys the commute-filter data; an entry ranked before this rename may carry a legacy PASS/FAIL/FLAG string in `location`, which the tool reads as the verdict when `location_verdict` is absent and moves to `location_verdict` as it rewrites the entry), `"language_gate": "PASS"/"FAIL"/"FLAG"`, `"language_note"` (dropped when `language_gate` is `PASS`), `"deadline": "YYYY-MM-DD" | null` from the same Step 2 JSON (replacing the stored value when the agent returned a different one - a fresh fetch is the freshest source; left alone when the agent returned `null`, because absence is not a correction - a fetch that degraded to a listing page returns no deadline, and taking that as "the posting dropped its deadline" would erase a real date and, because rule 6 leaves an entry with no stored `deadline` alone, quietly make that job immortal to the sweep), plus `"strengths": [...]` and `"gaps": [...]` copied from the scoring agent's Step 2 JSON for that job. These veto fields are as important to persist as the score itself - without them, nothing later (a re-read of `seen_jobs.json`, a debugging session, the user asking "why was this excluded") can recover why a job did or didn't make the shortlist.
+- Ranked jobs: `"status": "ranked"` plus `"rank_score": <overall>`, `"rank_verdict": "<band>"`, `"rank_date": "YYYY-MM-DD"`, `"location_verdict": "PASS"/"FAIL"/"FLAG"` (never the bare `location` key - that is the scraper's place field, e.g. "Aarhus, Denmark", and overwriting it with a verdict destroys the commute-filter data; an entry ranked before this rename may carry a legacy PASS/FAIL/FLAG string in `location`, which the tool reads as the verdict when `location_verdict` is absent and moves to `location_verdict` as it rewrites the entry), `"language_gate": "PASS"/"FAIL"/"FLAG"`, `"language_note"` (dropped when `language_gate` is `PASS`), `"deadline": "YYYY-MM-DD" | null` from the same Step 2 JSON (replacing the stored value when the agent returned a different one - a fresh fetch is the freshest source; left alone when the agent returned `null`, because absence is not a correction - a fetch that degraded to a listing page returns no deadline, and taking that as "the posting dropped its deadline" would erase a real date and, because rule 6 leaves an entry with no stored `deadline` alone, quietly make that job immortal to the sweep), plus `"strengths": [...]` and `"gaps": [...]` copied from the scoring agent's Step 2 JSON for that job, and `"callback_likelihood"`/`"callback_rationale"` copied the same way - additive, and their absence from an older or non-conforming agent response is tolerated the same way an absent `strengths`/`gaps` value is (the field simply isn't written). These veto fields are as important to persist as the score itself - without them, nothing later (a re-read of `seen_jobs.json`, a debugging session, the user asking "why was this excluded") can recover why a job did or didn't make the shortlist.
 - Dead or past-deadline jobs: `"status": "expired"`.
 - Entries retired by Step 3's rule 6 sweep: `"status": "expired"` for those too, written by `sweep --write`, with every other field on them untouched. The sweep reasons over entries this run never scored, so without its own write its conclusion would live only in the report and the same expiry would be re-derived from the same stored date on every future run.
 
@@ -141,12 +147,13 @@ Do not modify `job_search_tracker.csv` - that file records applications, and `/r
 Ranked <N> new postings (<X> shortlisted, <Y> below threshold, <Z> expired/vetoed).
 Swept <S> previously ranked entries (<E> newly expired, <C> closing soon).
 <D> jobs deferred to the next run - re-run `/rank` to continue.
+Interview-call odds are a rough heuristic from skill/experience-band match and posting freshness only - not informed by applicant volume, ATS behavior, or company-specific screening. Treat as a rough signal, not a probability.
 
 ### Shortlist
 
 | # | Score | Verdict | Title | Company | Location | Deadline | | URL |
 |---|-------|---------|-------|---------|----------|----------|---|-----|
-| 1 | 78 | Strong Fit | ... | ... | ... | ... | 🔥 | [Link](...) |
+| 1 | 78 | Strong Fit · High odds | ... | ... | ... | ... | 🔥 | [Link](...) |
 
 ### Why these ranked highest
 **1. <Title> at <Company> (78)** - [2-3 strength bullets and the honest gap, from the agent's findings]
@@ -170,6 +177,7 @@ Rules for the presentation:
 
 - Every table (shortlist, below threshold, excluded) includes the posting URL as a clickable link - use the `url` in `apply`'s output (not the entry's key, which for some portals is a company+title composite rather than the URL), so this never requires an extra lookup. Never drop the link for brevity.
 - A shortlisted job with `language_gate: FLAG` gets a ⚠ marker next to its Title (same treatment as a location FLAG) and its `language_note` quoted in that job's "Why these ranked highest" writeup, so the language-level gap is visible without digging into the raw JSON.
+- The Verdict cell shows `<band> · <Low/Medium/High> odds` (e.g. `Strong Fit · High odds`), and `callback_rationale` is surfaced in that job's "Why these ranked highest" writeup alongside the strengths and gaps.
 - Every claim traces to fetched posting text or the profile - no invented details.
 - Say explicitly that these are **triage scores from the posting text only**, and that `/apply` will re-evaluate with company research before anything is drafted.
 - Then ask: "Want to apply to any of these? Give me the number(s) and I'll start with the full `/apply` workflow."

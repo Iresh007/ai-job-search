@@ -302,6 +302,8 @@ def cmd_apply(args) -> int:
             value = result.get(field)
             if isinstance(value, list):
                 entry[field] = [str(b) for b in value][:3]
+        entry["callback_likelihood"] = result.get("callback_likelihood")
+        entry["callback_rationale"] = result.get("callback_rationale")
 
         parsed = parse_iso(entry.get("deadline"))
         rows.append(
@@ -321,6 +323,8 @@ def cmd_apply(args) -> int:
                 "urgent": bool(parsed and today <= parsed <= today + timedelta(days=URGENT_DAYS)),
                 "strengths": entry.get("strengths", []),
                 "gaps": entry.get("gaps", []),
+                "callback_likelihood": entry.get("callback_likelihood"),
+                "callback_rationale": entry.get("callback_rationale"),
             }
         )
 
