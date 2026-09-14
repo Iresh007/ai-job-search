@@ -223,7 +223,7 @@ Scraper-based portal CLIs rot silently: when a portal changes its markup, the pa
 
 ### Step 5: Present Results
 
-Present new jobs in a table sorted by fit (high first). When Step 1b skipped
+Present new jobs in a table sorted by fit (high first); within the same fit level, order by the **Portal priority order** documented in `search-queries.md` (company career pages, then other Indian hiring websites (Freehire/Naukri/Hirist.tech/ZipRecruiter), then LinkedIn last) - a High-fit company-site hit is listed before a High-fit LinkedIn hit, but a High-fit LinkedIn hit still outranks a Medium-fit company-site hit. Fit stays the primary sort key; portal priority only breaks ties within a fit tier. When Step 1b skipped
 portals (`enabled: false`), report them with the `skipped (disabled):` line below
 so opting one out stays visible rather than silent; omit the line when nothing
 was skipped. When any portal's results came from the Step 1c fallback this run
